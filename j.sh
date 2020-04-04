@@ -24,10 +24,10 @@ now=$(date +"%Hh%M %z")
 lastdate=$(grep '^===' $journal | tail -n 1 | sed 's/ *=== *//g')
 
 # handle command line arguments
-args=`getopt r: $*`
+args=$(getopt r:f:t: $*)
 if [ $? -ne 0 ]; then
-        echo 'usage: j [-r rating] [msg...]'
-        exit 2
+	echo 'usage: j [-r rating] [-f from] [-t to] [msg...]'
+	exit 2
 fi
 set -- $args
 
@@ -37,10 +37,39 @@ while [ $# -ne 0 ]
 do
 	case "$1" in
 		-r) rating="$2"; shift;;
+		-f) from="$2"; shift;;
+		-t) to="$2"; echo "to '$2'"; shift;;
 		--) shift; break;;
 	esac
 	shift
 done
+
+# if we're viewing, just retrieve
+if [ ! -z $from ]; then
+	fromDate=$(date --date="$from" -I)
+	if [ ! -z $to ]; then
+		toDate=$(date --date="$to" -I)
+		awk 'BEGIN { foundFrom=0; fromDate="'"$fromDate"'"; toDate="'"$toDate"'"; }
+			{
+				if ($1 == "===") {
+					if ($2 > toDate)						{ exit; }
+					if (foundFrom == 0 && $2 >= fromDate)	{ foundFrom++; }
+				}
+				if (foundFrom > 0) { print $0; }
+			}' <$journal
+	else
+		awk 'BEGIN { foundFrom=0; fromDate="'"$fromDate"'"; }
+			{
+				if (foundFrom==0 && $1 == "===" && $2 >= fromDate) { foundFrom++; }
+				if (foundFrom>0) { print $0; }
+			}' <$journal
+	fi
+	exit
+elif [ ! -z $to ]; then
+	toDate=$(date --date="$to" -I)
+	awk 'BEGIN { toDate="'"$toDate"'"; } { if ($1 == "===" && $2 > toDate) { exit; } print $0; }' <$journal
+	exit
+fi
 
 # handle the entry
 if [ -z "$*" ]; then
